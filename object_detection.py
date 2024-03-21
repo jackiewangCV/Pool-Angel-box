@@ -85,7 +85,8 @@ class ObjectDetectionNanoDet:
         input_blob, letterbox_scale = utils.letterbox(input_blob)
         # Inference
         preds = self.model.infer(input_blob)
-        preds=preds[preds[:,-1]==0,:]  ## Filter only persons.
+        if len(preds)>0:
+            preds=preds[preds[:,-1]==0,:]  ## Filter only persons.
         persons=[]
 
         for inds,p in enumerate(preds):

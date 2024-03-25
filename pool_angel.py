@@ -36,6 +36,10 @@ class PoolAngel:
 
 
     def run(self):
+        
+        if not self.save:
+            cv.namedWindow('Demo', cv2.WINDOW_NORMAL)
+                    
         self.bechmark.start("Whole process")
         last_img_store=datetime(2013,12,30,23,59,59)
 
@@ -82,7 +86,7 @@ class PoolAngel:
                     self.bechmark.start("Pose detection")
                     ## Do pose detection 
                     persons=self.pose_detection.detect(frame, persons)
-                    
+                    print("Num person:", len(persons))
                     self.bechmark.stop("Pose detection")
                     
             else:
@@ -127,7 +131,7 @@ class PoolAngel:
 
                 img = utils.vis(persons, frame, scale)  ## Last argment is hardcoded
                 if not self.save:
-                    cv.imshow('pool angel Demo', img)
+                    cv.imshow('Demo', img)
                     # cv2.waitKey(0)
                 else:
                     if self.video is None:

@@ -1,0 +1,2 @@
+nvidia-pyindex
+opencv-python

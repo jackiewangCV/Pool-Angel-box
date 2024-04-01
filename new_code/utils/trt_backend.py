@@ -34,7 +34,8 @@ class TRTInference:
             host_mem = cuda.pagelocked_empty(size, dtype)
             cuda_mem = cuda.mem_alloc(host_mem.nbytes)
             
-            binding_shape = engine.get_tensor_shape(binding)
+            # binding_shape = engine.get_tensor_shape(binding)
+            binding_shape = engine.get_binding_shape(binding)
             print(f"Name binding: {binding}, shape: {binding_shape}, size: {size}")
 
             bindings.append(int(cuda_mem))

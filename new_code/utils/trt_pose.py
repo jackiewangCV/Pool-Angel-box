@@ -50,7 +50,8 @@ class Pose_TRT(TRTInference):
         trt_outputs = self.infer(img_preprocessing)
         out_shapes = [(self.batch_size, output_d[1], output_d[2]) for output_d in self.out_shapes]
         output_tensor = [output[:np.prod(shape)].reshape(shape) for output, shape in zip(trt_outputs, out_shapes)]
-        bboxes, scores, kpts = pose_postprocess(output_tensor, ratio, dwdh, self.conf_thres, self.iou_thres)
+        # bboxes, scores, kpts = pose_postprocess(output_tensor, ratio, dwdh, self.conf_thres, self.iou_thres)
+        bboxes, scores, kpts = [], [], []
         return bboxes, scores, kpts
     
     def vis_pose(self, img, bboxes, scores, kpts, out_width, out_height, conf_kpt = 0.35):
@@ -215,6 +216,8 @@ def pose_postprocess(
 
 if __name__ == "__main__":
     import os
+    import traceback
+    import time
     input_video = "/workspace/data/slip_test_1.mp4"
     output_dir = "/workspace/data/output"
     pose_trt = Pose_TRT("models/yolov8s-pose.onnx.engine")
@@ -227,20 +230,27 @@ if __name__ == "__main__":
     output_video = f"{output_dir}/{name_input[0]}_{name_input[1]}.mkv"
     out_width = 640
     out_height = 480
-    video_writer = cv2.VideoWriter(output_video, cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (out_width, out_height))
+    # video_writer = cv2.VideoWriter(output_video, cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (out_width, out_height))
+    
+    start_t = time.time()
+    frame_c = 0
     while True:
         try:
             ret, img = cap.read()
             if not ret:
                 break
             bboxes, scores, kpts = pose_trt.predict(img)
-            vis_img = pose_trt.vis_pose(img, bboxes, scores, kpts, out_width, out_height)
+            # vis_img = pose_trt.vis_pose(img, bboxes, scores, kpts, out_width, out_height)
             # cv2.imwrite("test.jpg", vis_img)
-            video_writer.write(vis_img)
+            # video_writer.write(vis_img)
+            frame_c += 1
         except Exception as e:
             print(f"Error {e}")
+            traceback.print_exc()
             break
-    video_writer.release()
+    # video_writer.release()
+    total_t = time.time() - start_t
+    print(f"{frame_c} in {total_t} -> FPS: {frame_c / total_t}")
     # try:
     #     web_video = output_video.replace(".mkv", ".webm")
     # except Exception as e:

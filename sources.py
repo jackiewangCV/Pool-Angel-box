@@ -1,6 +1,18 @@
 import cv2
+import time
 
+class BenchMark:
+    def __init__(self) -> None:
+        self.tasks={}
+    
+    def start(self, name):
+        self.tasks[name]=time.time()
 
+    def stop(self, name):
+        tm=time.time()-self.tasks[name]
+        print(f'{name} took {tm} seconds')
+        return tm
+    
 class Source:
     def __init__(self,source_type) -> None:
         self.has_frame=True

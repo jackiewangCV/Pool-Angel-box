@@ -8,23 +8,23 @@ except:
     from trt_backend import (TRTInference, trt)
 
 KEYPOINTS = {
-    0: 'nose',
-    1: 'left_eye',
-    2: 'right_eye',
-    3: 'left_ear',
-    4: 'right_ear',
-    5: 'left_shoulder',
-    6: 'right_shoulder',
-    7: 'left_elbow',
-    8: 'right_elbow',
-    9: 'left_wrist',
-    10: 'right_wrist',
-    11: 'left_hip',
-    12: 'right_hip',
-    13: 'left_knee',
-    14: 'right_knee',
-    15: 'left_ankle',
-    16: 'right_ankle'
+    'nose': 0,
+    'left_eye': 1,
+    'right_eye': 2,
+    'left_ear': 3,
+    'right_ear': 4,
+    'left_shoulder': 5,
+    'right_shoulder': 6,
+    'left_elbow': 7,
+    'right_elbow': 8,
+    'left_wrist': 9,
+    'right_wrist': 10,
+    'left_hip': 11,
+    'right_hip': 12,
+    'left_knee': 13,
+    'right_knee': 14,
+    'left_ankle': 15,
+    'right_ankle': 16
 }
 POSE_SKELETON = [[16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12], [7, 13],
             [6, 7], [6, 8], [7, 9], [8, 10], [9, 11], [2, 3], [1, 2], [1, 3],
@@ -35,7 +35,7 @@ class Pose_TRT(TRTInference):
     def __init__(self, trt_engine_path, trt_engine_datatype=trt.DataType.FLOAT, batch_size=1):    
         super().__init__(trt_engine_path, trt_engine_datatype, batch_size)
         
-        self.input_size = (640, 640)
+        self.input_size = (320, 320)
         self.conf_thres = 0.25
         self.iou_thres = 0.65
         
@@ -50,8 +50,7 @@ class Pose_TRT(TRTInference):
         trt_outputs = self.infer(img_preprocessing)
         out_shapes = [(self.batch_size, output_d[1], output_d[2]) for output_d in self.out_shapes]
         output_tensor = [output[:np.prod(shape)].reshape(shape) for output, shape in zip(trt_outputs, out_shapes)]
-        # bboxes, scores, kpts = pose_postprocess(output_tensor, ratio, dwdh, self.conf_thres, self.iou_thres)
-        bboxes, scores, kpts = [], [], []
+        bboxes, scores, kpts = pose_postprocess(output_tensor, ratio, dwdh, self.conf_thres, self.iou_thres)
         return bboxes, scores, kpts
     
     def vis_pose(self, img, bboxes, scores, kpts, out_width, out_height, conf_kpt = 0.35):
@@ -85,6 +84,29 @@ class Pose_TRT(TRTInference):
     
         return vis_img   
 
+    def compute_rat(self, kpts):
+        def compute_distances(kpts, kp1, kp2):
+            pnt1 = kpts[self.keypoints_name[kp1]]
+            pnt2 = kpts[self.keypoints_name[kp2]]
+            return np.sqrt((pnt1[0]-pnt2[0])**2+(pnt1[1]-pnt2[1])**2)
+        head_len = compute_distances("left_ear", "right_ear")
+        person_height1 = compute_distances(kpts, "left_wrist", "left_elbow") + \
+                        compute_distances(kpts, "left_elbow", "left_shoulder") + \
+                        compute_distances(kpts, "left_shoulder", "right_shoulder") + \
+                        compute_distances(kpts, "right_shoulder", "right_elbow") + \
+                        compute_distances(kpts, "right_elbow", "right_wrist")
+        person_height2 = compute_distances(kpts, "left_ear", "left_shoulder") + \
+                        compute_distances(kpts, "left_shoulder", "left_hip") + \
+                        compute_distances(kpts, "left_hip", "left_knee") + \
+                        compute_distances(kpts, "left_knee", "left_ankle")
+        person_height3 = compute_distances(kpts, "right_ear", "right_shoulder") + \
+                        compute_distances(kpts, "right_shoulder", "right_hip") + \
+                        compute_distances(kpts, "right_hip", "right_knee") + \
+                        compute_distances(kpts, "right_knee", "right_ankle")
+        person_height=max([person_height1,person_height2,person_height3]) #
+        rat=head_len/person_height
+        return rat
+    
 def random_rgb_color():
     r = np.random.randint(0, 256)
     g = np.random.randint(0, 256)
@@ -220,7 +242,8 @@ if __name__ == "__main__":
     import time
     input_video = "/workspace/data/slip_test_1.mp4"
     output_dir = "/workspace/data/output"
-    pose_trt = Pose_TRT("models/yolov8s-pose.onnx.engine")
+    # pose_trt = Pose_TRT("models/yolov8s-pose.onnx.engine")
+    pose_trt = Pose_TRT("models/yolov8n-pose.onnx.engine")
     # input_file_path = "/workspace/dataset/images/eartag02351.png"
     # img = cv2.imread(input_file_path)
     cap = cv2.VideoCapture(input_video, cv2.CAP_FFMPEG)
@@ -230,7 +253,7 @@ if __name__ == "__main__":
     output_video = f"{output_dir}/{name_input[0]}_{name_input[1]}.mkv"
     out_width = 640
     out_height = 480
-    # video_writer = cv2.VideoWriter(output_video, cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (out_width, out_height))
+    video_writer = cv2.VideoWriter(output_video, cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (out_width, out_height))
     
     start_t = time.time()
     frame_c = 0
@@ -240,15 +263,15 @@ if __name__ == "__main__":
             if not ret:
                 break
             bboxes, scores, kpts = pose_trt.predict(img)
-            # vis_img = pose_trt.vis_pose(img, bboxes, scores, kpts, out_width, out_height)
+            vis_img = pose_trt.vis_pose(img, bboxes, scores, kpts, out_width, out_height)
+            video_writer.write(vis_img)
             # cv2.imwrite("test.jpg", vis_img)
-            # video_writer.write(vis_img)
             frame_c += 1
         except Exception as e:
             print(f"Error {e}")
             traceback.print_exc()
             break
-    # video_writer.release()
+    video_writer.release()
     total_t = time.time() - start_t
     print(f"{frame_c} in {total_t} -> FPS: {frame_c / total_t}")
     # try:

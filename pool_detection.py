@@ -1,6 +1,4 @@
-import requests
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
 import os
 import subprocess
@@ -38,15 +36,6 @@ def get_pool(image, url):
             print('Using local mobile SAM')
             subprocess.run(["python", "segmentation/mobileSAM_onnx.py", image])  ## subprpcess is to force the pool model to be removed from RAM, otherwise we need to depend on the garbage collection
             mask=cv2.imread('./data/mask.png', cv2.IMREAD_GRAYSCALE)
-        else:
-            file={'file':open(image,'rb')}
-
-            resp=requests.post(url+'detect_pool', files=file)
-            resp=resp.json()['message']
-
-            mask=rle2mask(resp['rle'],shape=resp['size'])
-            mask=mask*255
-            cv2.imwrite('./data/mask.png', mask)
     else:
         mask=cv2.imread('./data/mask.png', cv2.IMREAD_GRAYSCALE)
 
@@ -83,5 +72,3 @@ if __name__ == '__main__':
     im=cv2.imread(image)
     mask,pool_contour=get_pool(image)
     cv2.drawContours(im, pool_contour, -1, (0, 0, 255), 3)
-    plt.imshow(im[:,:,::-1])
-    plt.show()

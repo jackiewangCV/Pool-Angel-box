@@ -3,37 +3,43 @@ from sources import (Source, BenchMark)
 from pool_detection import get_pool
 import numpy as np
 from datetime import datetime
+import time
 
 import os
-from new_code.utils.trt_pose import Pose_TRT
+import sys
+sys.path.append("new_code")
+from utils.trt_pose import Pose_TRT
 from property import Person
 
 class PoolAngel:
-    def __init__(self, source, server_url=None) -> None:
+    def __init__(self, source) -> None:
         self.source = Source(source)
 
-        self.pose_model = Pose_TRT("new_code/models/yolov8n-pose.onnx.engine")
+        self.pose_model = Pose_TRT("new_code/models/yolov8m-pose.onnx.engine", img_size=640)
         self.bechmark = BenchMark()
         self.pool_contour = None
         self.video = None
-        self.url = server_url
+        self.url = "local"
         
         output_dir = "./data/output"
         os.makedirs(output_dir, exist_ok=True)
         output_video = f"{output_dir}/output.mkv"
-        out_width = 640
-        out_height = 480
+        self.out_width = 640
+        self.out_height = 480
         input_fps = 25
         self.video_writer = cv2.VideoWriter(output_video, 
-                cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (out_width, out_height))
+                cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (self.out_width, self.out_height))
+
+        
 
     def run(self):
                     
         self.bechmark.start("Whole process")
         last_img_store = datetime(2013,12,30,23,59,59)
-
+        frame_c = 0
+        start_t = time.time()
         while True:
-            self.bechmark.start("Frame procesisng")
+            # self.bechmark.start("Frame procesisng")
 
             ### Frame capture
             self.bechmark.start("Frame Capture")
@@ -45,7 +51,7 @@ class PoolAngel:
                 if self.video is not None:
                     self.video.release()
                 break
-            
+            frame_c += 1
             if self.pool_contour is None:
                 print("Doing pool detection for first time..")
                 self.bechmark.start("mask detection")
@@ -58,36 +64,48 @@ class PoolAngel:
             ### Object detection 
             self.bechmark.start("Object detection")
             bboxes, scores, kpts = self.pose_model.predict(frame)
-            persons=[]
+            persons = []
+            colors = []
+            typs = []
             for i, bb in enumerate(bboxes):
                 rat = self.pose_model.compute_rat(kpts[i])
-                ps = Person(i, bbox=bboxes[i], pose=kpts[i], confidence=scores[i], ratio=rat)
-                ps.child_or_adult()
+                ps = Person(i, bbox=bb, pose=kpts[i], confidence=scores[i], ratio=rat)
+                tp = ps.child_or_adult()
                 ps.detect_slip()
-                
                 ps.update_distance(self.pool_contour, self.pool_contour_outer)
                 persons.append(ps)
-                
+                if ps.dist_pool == 0:
+                    clr = (0, 0, 255)
+                elif ps.warn:
+                    clr = (30, 255, 255)
+                else:
+                    clr = (0, 255, 0)
+                colors.append(clr)    
+                typs.append(tp)
+                print(f"Pose {i}: rat {rat}, typ {tp} {clr}")
             self.bechmark.stop("Object detection")
-
-
-            ## visualize detections
-            self.bechmark.start("Visualization")
-            cv2.drawContours(frame, pool_contour[:,np.newaxis,:], -1, (0, 0, 255), 3)
-            cv2.drawContours(frame, pool_contour_outer[:,np.newaxis,:], -1, (30,255, 255), 3)
-            vis_img = self.pose_model.vis_pose(frame, bboxes, scores, kpts)  ## Last argment is hardcoded
-            self.video_writer.write(vis_img)
-            self.bechmark.stop("Visualization")
-
-            time_now=datetime.now()
-            if (time_now-last_img_store).total_seconds()>100:  ## store only if last event has happened in last 10min
-                ## recording
-                for per in persons:
-                    if per.dist_pool == 0 or per.warn or per.is_slipped:
-                        print("saving image")
-                        last_img_store = time_now
-                        cv2.imwrite("./data/"+str(time_now)+".png", vis_img)
-                        break
             
-            self.bechmark.stop("Frame procesisng")
+            ## visualize detections
+            # self.bechmark.start("Visualization")
+            cv2.drawContours(frame, pool_contour[:,np.newaxis,:], -1, (0, 0, 255), 3)
+            cv2.drawContours(frame, pool_contour_outer[:,np.newaxis,:], -1, (30, 255, 255), 3)
+            vis_img = self.pose_model.vis_pose(frame, bboxes, scores, kpts, 
+                    self.out_width, self.out_height, typs=typs, colors=colors)  ## Last argment is hardcoded
+            self.video_writer.write(vis_img)
+            # self.bechmark.stop("Visualization")
+
+            # time_now=datetime.now()
+            # if (time_now-last_img_store).total_seconds()>100:  ## store only if last event has happened in last 10min
+            #     ## recording
+            #     for per in persons:
+            #         if per.dist_pool == 0 or per.warn or per.is_slipped:
+            #             print("saving image")
+            #             last_img_store = time_now
+            #             cv2.imwrite("./data/"+str(time_now)+".png", vis_img)
+            #             break
+            
+            # self.bechmark.stop("Frame procesisng")
         self.bechmark.stop("Whole process")
+        total_t = time.time() - start_t
+        print(f"{frame_c} in {total_t} -> FPS: {frame_c / total_t}")
+        self.pose_model.destroy()

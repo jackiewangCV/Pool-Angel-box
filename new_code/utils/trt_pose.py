@@ -8,23 +8,23 @@ except:
     from trt_backend import (TRTInference, trt)
 
 KEYPOINTS = {
-    'nose': 0,
-    'left_eye': 1,
-    'right_eye': 2,
-    'left_ear': 3,
-    'right_ear': 4,
-    'left_shoulder': 5,
-    'right_shoulder': 6,
-    'left_elbow': 7,
-    'right_elbow': 8,
-    'left_wrist': 9,
-    'right_wrist': 10,
-    'left_hip': 11,
-    'right_hip': 12,
-    'left_knee': 13,
-    'right_knee': 14,
-    'left_ankle': 15,
-    'right_ankle': 16
+    "nose": 0,
+    "left_eye": 1,
+    "right_eye": 2,
+    "left_ear": 3,
+    "right_ear": 4,
+    "left_shoulder": 5,
+    "right_shoulder": 6,
+    "left_elbow": 7,
+    "right_elbow": 8,
+    "left_wrist": 9,
+    "right_wrist": 10,
+    "left_hip": 11,
+    "right_hip": 12,
+    "left_knee": 13,
+    "right_knee": 14,
+    "left_ankle": 15,
+    "right_ankle": 16
 }
 POSE_SKELETON = [[16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12], [7, 13],
             [6, 7], [6, 8], [7, 9], [8, 10], [9, 11], [2, 3], [1, 2], [1, 3],
@@ -32,10 +32,10 @@ POSE_SKELETON = [[16, 14], [14, 12], [17, 15], [15, 13], [12, 13], [6, 12], [7, 
 
 class Pose_TRT(TRTInference):
     
-    def __init__(self, trt_engine_path, trt_engine_datatype=trt.DataType.FLOAT, batch_size=1):    
+    def __init__(self, trt_engine_path, trt_engine_datatype=trt.DataType.FLOAT, batch_size=1, img_size=640):    
         super().__init__(trt_engine_path, trt_engine_datatype, batch_size)
         
-        self.input_size = (320, 320)
+        self.input_size = (img_size, img_size)
         self.conf_thres = 0.25
         self.iou_thres = 0.65
         
@@ -53,7 +53,7 @@ class Pose_TRT(TRTInference):
         bboxes, scores, kpts = pose_postprocess(output_tensor, ratio, dwdh, self.conf_thres, self.iou_thres)
         return bboxes, scores, kpts
     
-    def vis_pose(self, img, bboxes, scores, kpts, out_width, out_height, conf_kpt = 0.35):
+    def vis_pose(self, img, bboxes, scores, kpts, out_width, out_height, typs=None, colors=None, conf_kpt=0.2):
         # print("num pose:", bboxes.shape[0])
         vis_img = img.copy()
         for i in range(bboxes.shape[0]):
@@ -61,22 +61,30 @@ class Pose_TRT(TRTInference):
             score = scores[i]
             kpt = kpts[i]
             
+            color = (255, 0, 255)
+            if colors is not None:
+                color = colors[i]
+            label = ""
+            if typs is not None:
+                label = typs[i]
+            
             c1, c2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-            cv2.rectangle(vis_img, c1, c2, (255, 0, 255), 3, cv2.LINE_AA)
+            cv2.rectangle(vis_img, c1, c2, color, 3, cv2.LINE_AA)
+            cv2.putText(vis_img, f"{label}", (int(box[0]-15), int(box[1]-15)), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.75, (0, 0, 255), thickness=3)
             line_width = 3
             for ic, pair in enumerate(self.skeleton):
-                color = self.skeleton_color[ic]
+                if color is not None:
+                    color = self.skeleton_color[ic]
                 p1 = int(pair[0]-1)
                 p2 = int(pair[1]-1)
                 x1, y1, v1 = int(kpt[p1 * 3]), int(kpt[p1 * 3 + 1]), float(kpt[p1 * 3 + 2])
                 x2, y2, v2 = int(kpt[p2 * 3]), int(kpt[p2 * 3 + 1]), float(kpt[p2 * 3 + 2])
-            
+
                 if v1 > conf_kpt:
-                    # cv2.putText(vis_img, f"{self.keypoints_name[p1]}", 
-                    #             (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.35, color, 1)
-                    cv2.circle(vis_img, (x1, y1), line_width - 1, (255, 0, 255), -1)
+                    cv2.circle(vis_img, (x1, y1), line_width - 1, color, -1)
                 if v2 > conf_kpt:
-                    cv2.circle(vis_img, (x2, y2), line_width - 1, (255, 0, 255), -1)
+                    cv2.circle(vis_img, (x2, y2), line_width - 1, color, -1)
                 if v1 > conf_kpt and v2 > conf_kpt:
                     cv2.line(vis_img, (x1, y1), (x2, y2), color, line_width)
         
@@ -86,25 +94,35 @@ class Pose_TRT(TRTInference):
 
     def compute_rat(self, kpts):
         def compute_distances(kpts, kp1, kp2):
-            pnt1 = kpts[self.keypoints_name[kp1]]
-            pnt2 = kpts[self.keypoints_name[kp2]]
+            pnt1 = kpts[self.keypoints_name[kp1]*3: self.keypoints_name[kp1]*3+3]
+            pnt2 = kpts[self.keypoints_name[kp2]*3: self.keypoints_name[kp2]*3+3]
             return np.sqrt((pnt1[0]-pnt2[0])**2+(pnt1[1]-pnt2[1])**2)
-        head_len = compute_distances("left_ear", "right_ear")
-        person_height1 = compute_distances(kpts, "left_wrist", "left_elbow") + \
-                        compute_distances(kpts, "left_elbow", "left_shoulder") + \
-                        compute_distances(kpts, "left_shoulder", "right_shoulder") + \
-                        compute_distances(kpts, "right_shoulder", "right_elbow") + \
-                        compute_distances(kpts, "right_elbow", "right_wrist")
-        person_height2 = compute_distances(kpts, "left_ear", "left_shoulder") + \
-                        compute_distances(kpts, "left_shoulder", "left_hip") + \
-                        compute_distances(kpts, "left_hip", "left_knee") + \
+        # head_len = compute_distances(kpts, "left_ear", "right_ear")
+        # person_height1 = compute_distances(kpts, "left_wrist", "left_elbow") + \
+        #                 compute_distances(kpts, "left_elbow", "left_shoulder") + \
+        #                 compute_distances(kpts, "left_shoulder", "right_shoulder") + \
+        #                 compute_distances(kpts, "right_shoulder", "right_elbow") + \
+        #                 compute_distances(kpts, "right_elbow", "right_wrist")
+        # person_height2 = compute_distances(kpts, "left_ear", "left_shoulder") + \
+        #                 compute_distances(kpts, "left_shoulder", "left_hip") + \
+        #                 compute_distances(kpts, "left_hip", "left_knee") + \
+        #                 compute_distances(kpts, "left_knee", "left_ankle")
+        # person_height3 = compute_distances(kpts, "right_ear", "right_shoulder") + \
+        #                 compute_distances(kpts, "right_shoulder", "right_hip") + \
+        #                 compute_distances(kpts, "right_hip", "right_knee") + \
+        #                 compute_distances(kpts, "right_knee", "right_ankle")
+        # person_height = max([person_height1,person_height2,person_height3]) #
+        # rat = head_len / person_height
+        
+        leg_len1 = compute_distances(kpts, "left_hip", "left_knee") + \
                         compute_distances(kpts, "left_knee", "left_ankle")
-        person_height3 = compute_distances(kpts, "right_ear", "right_shoulder") + \
-                        compute_distances(kpts, "right_shoulder", "right_hip") + \
-                        compute_distances(kpts, "right_hip", "right_knee") + \
+        leg_len2 = compute_distances(kpts, "right_hip", "right_knee") + \
                         compute_distances(kpts, "right_knee", "right_ankle")
-        person_height=max([person_height1,person_height2,person_height3]) #
-        rat=head_len/person_height
+        leg_max = max([leg_len1, leg_len2])
+        body_width1 = compute_distances(kpts, "left_shoulder", "right_shoulder")
+        body_width2 = compute_distances(kpts, "left_hip", "right_hip")
+        body_width = max([body_width1, body_width2])
+        rat = body_width / leg_max
         return rat
     
 def random_rgb_color():
@@ -240,10 +258,11 @@ if __name__ == "__main__":
     import os
     import traceback
     import time
-    input_video = "/workspace/data/slip_test_1.mp4"
+    input_video = "/workspace/data/ch01_00000000009000713.mp4"
     output_dir = "/workspace/data/output"
-    # pose_trt = Pose_TRT("models/yolov8s-pose.onnx.engine")
-    pose_trt = Pose_TRT("models/yolov8n-pose.onnx.engine")
+    pose_trt = Pose_TRT("models/yolov8m-pose.onnx.engine", img_size=640)
+    # pose_trt = Pose_TRT("models/yolov8s-pose.onnx.engine", img_size=320)
+    # pose_trt = Pose_TRT("models/yolov8n-pose.onnx.engine", img_size=320)
     # input_file_path = "/workspace/dataset/images/eartag02351.png"
     # img = cv2.imread(input_file_path)
     cap = cv2.VideoCapture(input_video, cv2.CAP_FFMPEG)

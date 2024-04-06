@@ -16,7 +16,7 @@ class Person:
         self.ratio=ratio
         self.warn=False
 
-    def detect_slip(self, poses):
+    def detect_slip(self):
         pose = self.pose[-1]
         pose = np.array(pose).reshape(17, 3)
         height1=np.sqrt((pose[0,1]-pose[15,1])**2+(pose[0,0]-pose[16,0])**2)
@@ -26,9 +26,9 @@ class Person:
         diff3=np.abs(pose[11,0]-pose[13,0])
         diff4=np.abs(pose[14,0]-pose[12,0])
         self.diff=np.mean(np.array([diff1, diff2, diff3, diff4]))/max(height1,height2)
-        if self.diff<0.15:
+        if self.diff<0.05:
             self.is_slipped=True
-            print("slip detected")
+            print(f"slip detected {self.diff}")
         else:
             self.is_slipped=False
 
@@ -47,10 +47,11 @@ class Person:
             self.warn=False
         
     def child_or_adult(self):
-        if self.ratio > 20:
+        if self.ratio > 0.6:
             self.is_child = "child"
         else:
             self.is_child = "adult"
+        return self.is_child
     
     def __str__(self):
         return "".join([str(x) for x in self.pose])

@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 # from segmentation.utils import mask2rle
-import matplotlib.pyplot as plt
 from mobile_sam import sam_model_registry, SamAutomaticMaskGenerator
 
 DEVICE = 'cpu'

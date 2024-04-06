@@ -2,7 +2,6 @@ import numpy as np
 import cv2
 from .utils import mask2rle
 from fastsam import FastSAM, FastSAMPrompt
-import matplotlib.pyplot as plt
 
 
 DEVICE = 'cpu'

@@ -2,8 +2,6 @@ import onnxruntime as ort
 import numpy as np
 import cv2
 from typing import Tuple
-from copy import deepcopy
-import matplotlib.pyplot as plt
 
 def build_point_grid(n_per_side: int) -> np.ndarray:
     """Generates a 2D grid of points evenly spaced in [0,1]x[0,1]."""
@@ -110,7 +108,7 @@ class MobileSAM_pooldetection:
 
         ort_sess_mask_decoder=ort.InferenceSession("./data/mobile_sam_opset11.onnx")
         for pt in points_for_image:
-            print(pt)
+            # print(pt)
             onnx_coord=apply_coords(np.array(pt), org_size)
             onnx_label = np.array([1]*len(onnx_coord), dtype=np.float32)
             ort_inputs = {
@@ -138,7 +136,6 @@ class MobileSAM_pooldetection:
         cnt=1
         
         for i in range(len(masks)):
-            plt.imshow(masks[i])
             mask = masks[i]
             olp= np.sum(mask_in*mask)
 

@@ -36,21 +36,26 @@ class Pose_TRT(TRTInference):
         super().__init__(trt_engine_path, trt_engine_datatype, batch_size)
         
         self.input_size = (img_size, img_size)
-        self.conf_thres = 0.25
+        self.conf_thres = 0.45
         self.iou_thres = 0.65
         
         self.keypoints_name = KEYPOINTS
         self.skeleton = POSE_SKELETON
         self.skeleton_color = []
+        
         for pair in self.skeleton:
             self.skeleton_color.append(random_rgb_color())
      
-    def predict(self, input_image):
+    def predict(self, input_image, zone_det=None):
+        if zone_det is not None:
+            input_image = input_image[zone_det[1]:zone_det[3], zone_det[0]:zone_det[2]].copy()
+
         img_preprocessing, ratio, dwdh = pre_processing(input_image, self.input_size)
         trt_outputs = self.infer(img_preprocessing)
         out_shapes = [(self.batch_size, output_d[1], output_d[2]) for output_d in self.out_shapes]
         output_tensor = [output[:np.prod(shape)].reshape(shape) for output, shape in zip(trt_outputs, out_shapes)]
-        bboxes, scores, kpts = pose_postprocess(output_tensor, ratio, dwdh, self.conf_thres, self.iou_thres)
+        bboxes, scores, kpts = pose_postprocess(output_tensor, ratio, dwdh, zone_det, self.conf_thres, self.iou_thres)
+            
         return bboxes, scores, kpts
     
     def vis_pose(self, img, bboxes, scores, kpts, out_width, out_height, typs=None, colors=None, conf_kpt=0.2):
@@ -96,34 +101,33 @@ class Pose_TRT(TRTInference):
         def compute_distances(kpts, kp1, kp2):
             pnt1 = kpts[self.keypoints_name[kp1]*3: self.keypoints_name[kp1]*3+3]
             pnt2 = kpts[self.keypoints_name[kp2]*3: self.keypoints_name[kp2]*3+3]
-            return np.sqrt((pnt1[0]-pnt2[0])**2+(pnt1[1]-pnt2[1])**2)
-        # head_len = compute_distances(kpts, "left_ear", "right_ear")
-        # person_height1 = compute_distances(kpts, "left_wrist", "left_elbow") + \
-        #                 compute_distances(kpts, "left_elbow", "left_shoulder") + \
-        #                 compute_distances(kpts, "left_shoulder", "right_shoulder") + \
-        #                 compute_distances(kpts, "right_shoulder", "right_elbow") + \
-        #                 compute_distances(kpts, "right_elbow", "right_wrist")
-        # person_height2 = compute_distances(kpts, "left_ear", "left_shoulder") + \
-        #                 compute_distances(kpts, "left_shoulder", "left_hip") + \
-        #                 compute_distances(kpts, "left_hip", "left_knee") + \
-        #                 compute_distances(kpts, "left_knee", "left_ankle")
-        # person_height3 = compute_distances(kpts, "right_ear", "right_shoulder") + \
-        #                 compute_distances(kpts, "right_shoulder", "right_hip") + \
-        #                 compute_distances(kpts, "right_hip", "right_knee") + \
-        #                 compute_distances(kpts, "right_knee", "right_ankle")
-        # person_height = max([person_height1,person_height2,person_height3]) #
-        # rat = head_len / person_height
+            x_line = pnt1[0]-pnt2[0] if (pnt1[2] > 0.3 and pnt2[2] > 0.3) else 0
+            y_line = pnt1[1]-pnt2[1] if (pnt1[2] > 0.3 and pnt2[2] > 0.3) else 0
+            return np.sqrt((x_line)**2+(y_line)**2)
+        head_len1 = compute_distances(kpts, "left_ear", "right_ear")
+        head_len2 = compute_distances(kpts, "left_shoulder", "right_shoulder") / 2
+        head_len3 = compute_distances(kpts, "left_shoulder", "left_ear") / 2
+        head_len4 = compute_distances(kpts, "right_shoulder", "right_ear") / 2
+        head_len = max([head_len1,head_len2,head_len3,head_len4]) #
         
-        leg_len1 = compute_distances(kpts, "left_hip", "left_knee") + \
+        person_height1 = compute_distances(kpts, "left_wrist", "left_elbow") + \
+                        compute_distances(kpts, "left_elbow", "left_shoulder") + \
+                        compute_distances(kpts, "left_shoulder", "right_shoulder") + \
+                        compute_distances(kpts, "right_shoulder", "right_elbow") + \
+                        compute_distances(kpts, "right_elbow", "right_wrist")
+        person_height2 = compute_distances(kpts, "left_ear", "left_shoulder") + \
+                        compute_distances(kpts, "left_shoulder", "left_hip") + \
+                        compute_distances(kpts, "left_hip", "left_knee") + \
                         compute_distances(kpts, "left_knee", "left_ankle")
-        leg_len2 = compute_distances(kpts, "right_hip", "right_knee") + \
+        person_height3 = compute_distances(kpts, "right_ear", "right_shoulder") + \
+                        compute_distances(kpts, "right_shoulder", "right_hip") + \
+                        compute_distances(kpts, "right_hip", "right_knee") + \
                         compute_distances(kpts, "right_knee", "right_ankle")
-        leg_max = max([leg_len1, leg_len2])
-        body_width1 = compute_distances(kpts, "left_shoulder", "right_shoulder")
-        body_width2 = compute_distances(kpts, "left_hip", "right_hip")
-        body_width = max([body_width1, body_width2])
-        rat = body_width / leg_max
-        return rat
+        person_height = max([person_height1,person_height2,person_height3]) #
+    
+        rat = head_len / person_height
+        
+        return rat, person_height
     
 def random_rgb_color():
     r = np.random.randint(0, 256)
@@ -166,7 +170,7 @@ def pre_processing(img_origin, imgsz=(640, 640)):
         img = img[None]  # expand for batch dim
     return img, ratio, dwdh
 
-def apply_nms(boxes, scores, kpts, iou_threshold):
+def apply_nms(boxes, scores, kpts, conf_thres, iou_threshold):
     
     def calculate_iou(box1, box2):
         xmin1, ymin1, xmax1, ymax1 = box1
@@ -194,7 +198,7 @@ def apply_nms(boxes, scores, kpts, iou_threshold):
         for j in selected_indices:
             if keep:
                 overlap = calculate_iou(bbox, sorted_boxes[j])
-                keep = overlap <= iou_threshold
+                keep = overlap <= iou_threshold and sorted_scores[j] >= conf_thres
             else:
                 break
         if keep:
@@ -217,8 +221,8 @@ def xywh2xyxy(x):
 
 def pose_postprocess(
         out: Union[Tuple, np.ndarray],
-        ratio, dwdh,
-        conf_thres: float = 0.25,
+        ratio, dwdh, zone_det,
+        conf_thres: float = 0.35,
         iou_thres: float = 0.65) \
         -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     # assert (len(out) == 3, "size of the output should be 3")
@@ -237,7 +241,7 @@ def pose_postprocess(
     high_kpts = kpts[keep_high_score_pred, :]
     
     high_boxes = xywh2xyxy(high_boxes)
-    selected_boxes, selected_scores, selected_kpts = apply_nms(high_boxes, high_confs, high_kpts, iou_thres)
+    selected_boxes, selected_scores, selected_kpts = apply_nms(high_boxes, high_confs, high_kpts, conf_thres, iou_thres)
     boxes, confs, kpts = [], [], []    
     for i in range(selected_boxes.shape[0]):  # detections per image
         # Rescale boxes from img_size to im0 size
@@ -251,6 +255,13 @@ def pose_postprocess(
         selected_kpts[i][1::step] -= dwdh[1]  # y padding
         selected_kpts[i][0::step] /= ratio
         selected_kpts[i][1::step] /= ratio
+        
+        if zone_det is not None:
+            selected_boxes[i][[0, 2]] += zone_det[0]  # x padding zone
+            selected_boxes[i][[1, 3]] += zone_det[1]  # x padding zone
+            
+            selected_kpts[i][0::step] += zone_det[0]  # x padding zone
+            selected_kpts[i][1::step] += zone_det[1]  # y padding zone
 
     return selected_boxes, selected_scores, selected_kpts
 

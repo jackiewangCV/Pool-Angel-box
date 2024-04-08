@@ -15,9 +15,10 @@ class PoolAngel:
     def __init__(self, source) -> None:
         self.source = Source(source)
 
-        self.pose_model = Pose_TRT("new_code/models/yolov8m-pose.onnx.engine", img_size=640)
+        self.pose_model = Pose_TRT("new_code/models/yolov8s-pose-640.onnx.engine", img_size=640)
         self.bechmark = BenchMark()
         self.pool_contour = None
+        self.zone_det = None
         self.video = None
         self.url = "local"
         
@@ -29,15 +30,15 @@ class PoolAngel:
         input_fps = 25
         self.video_writer = cv2.VideoWriter(output_video, 
                 cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (self.out_width, self.out_height))
-
-        
-
+        self.max_people_height = None
+        self.min_people_height = None
     def run(self):
                     
         self.bechmark.start("Whole process")
         last_img_store = datetime(2013,12,30,23,59,59)
         frame_c = 0
         start_t = time.time()
+        
         while True:
             # self.bechmark.start("Frame procesisng")
 
@@ -55,22 +56,45 @@ class PoolAngel:
             if self.pool_contour is None:
                 print("Doing pool detection for first time..")
                 self.bechmark.start("mask detection")
-                self.mask,pool_contour, pool_contour_outer=get_pool(frame, self.url)
-                self.pool_contour=pool_contour[:,0,:]
-                self.pool_contour_outer=pool_contour_outer[:,0,:]
+                self.mask, pool_contour, pool_contour_outer = get_pool(frame, self.url)
+                self.pool_contour = pool_contour[:,0,:]
+                self.pool_contour_outer = pool_contour_outer[:,0,:]
+                
+                max_height, max_width = frame.shape[:2]
+                x, _, width, _ = cv2.boundingRect(self.pool_contour_outer)
+                xmin = max(0, x - width // 4)
+                xmax = min(max_width, x + width + width // 4)
+                self.zone_det = (xmin, 0, xmax, max_height)
                 print(self.mask.shape)
                 self.bechmark.stop("mask detection")
 
             ### Object detection 
             self.bechmark.start("Object detection")
-            bboxes, scores, kpts = self.pose_model.predict(frame)
+            bboxes, scores, kpts = self.pose_model.predict(frame, self.zone_det)
             persons = []
             colors = []
             typs = []
             for i, bb in enumerate(bboxes):
-                rat = self.pose_model.compute_rat(kpts[i])
+                rat, p_height = self.pose_model.compute_rat(kpts[i])
+                if self.max_people_height is None:
+                    self.max_people_height = p_height
+                elif self.max_people_height < p_height:
+                    self.max_people_height = p_height
+                if self.min_people_height is None:
+                    self.min_people_height = p_height
+                elif self.min_people_height > p_height:
+                    self.min_people_height = p_height
                 ps = Person(i, bbox=bb, pose=kpts[i], confidence=scores[i], ratio=rat)
                 tp = ps.child_or_adult()
+                if self.max_people_height is not None and \
+                    self.min_people_height is not None and \
+                    self.min_people_height / self.max_people_height < 0.6:
+                    rat = p_height / ((self.max_people_height + self.min_people_height) / 2)
+                    if rat < 1.05:
+                        tp = f"child {rat:.2f}"
+                    else:
+                        tp = f"adult {rat:.2f}"
+                
                 ps.detect_slip()
                 ps.update_distance(self.pool_contour, self.pool_contour_outer)
                 persons.append(ps)
@@ -81,17 +105,22 @@ class PoolAngel:
                 else:
                     clr = (0, 255, 0)
                 colors.append(clr)    
-                typs.append(tp)
-                print(f"Pose {i}: rat {rat}, typ {tp} {clr}")
+                typs.append(f"{tp} {p_height:.1f}")
+                print(f"[{frame_c}] {scores[i][0]:.2f} Pose {i} : typ {tp} rat {p_height:.2f}")
             self.bechmark.stop("Object detection")
             
             ## visualize detections
             # self.bechmark.start("Visualization")
             cv2.drawContours(frame, pool_contour[:,np.newaxis,:], -1, (0, 0, 255), 3)
             cv2.drawContours(frame, pool_contour_outer[:,np.newaxis,:], -1, (30, 255, 255), 3)
+            cv2.putText(frame, f"Frame {frame_c}", (50, 50), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.75, (0, 0, 255), thickness=3)
+            cv2.rectangle(frame, (self.zone_det[0], self.zone_det[1]), 
+                        (self.zone_det[2], self.zone_det[3]), (255, 0, 255), 3, cv2.LINE_AA)
             vis_img = self.pose_model.vis_pose(frame, bboxes, scores, kpts, 
                     self.out_width, self.out_height, typs=typs, colors=colors)  ## Last argment is hardcoded
             self.video_writer.write(vis_img)
+            # cv2.imwrite("t.jpg", vis_img)
             # self.bechmark.stop("Visualization")
 
             # time_now=datetime.now()

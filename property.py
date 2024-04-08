@@ -47,7 +47,7 @@ class Person:
             self.warn=False
         
     def child_or_adult(self):
-        if self.ratio > 0.6:
+        if self.ratio >= 0.12:
             self.is_child = "child"
         else:
             self.is_child = "adult"

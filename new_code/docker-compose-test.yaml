@@ -1,11 +1,11 @@
 services:   
   aiprod_dev:
-    container_name: dstest
-    image: ds_cont_arm:jnano-1.0
+    container_name: aicore
+    image: l4t_trt_image:latest
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-      - /media/sd64g/workspace:/workspace/
+      - ../../:/workspace/
 
     runtime: nvidia
     restart: unless-stopped

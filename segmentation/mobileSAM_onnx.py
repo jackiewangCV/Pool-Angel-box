@@ -56,14 +56,14 @@ def mask2rle(img):
     pixels = np.concatenate([[0], pixels, [0]])
     runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
     runs[1::2] -= runs[::2]
-    return ' '.join(str(x) for x in runs)
+    return " ".join(str(x) for x in runs)
 
 class MobileSAM_pooldetection:
     def __init__(self) -> None:
         model_type = "vit_t"
         sam_checkpoint = "./data/mobile_sam.pt"
 
-        self.ort_sess_img_encoder = None #ort.InferenceSession('./data/mobile_sam_Oct23_gelu_approx.onnx')
+        self.ort_sess_img_encoder = None #ort.InferenceSession("./data/mobile_sam_Oct23_gelu_approx.onnx")
         self.ort_sess_mask_decoder =None #ort.InferenceSession("./data/sam_mask_decoder_single.onnx")
         self.target_length=1024
     
@@ -71,7 +71,7 @@ class MobileSAM_pooldetection:
         image_org=cv2.imread(IMAGE_PATH)
         org_size=image_org.shape[:2]
 
-        print('read image')
+        print("read image")
         
         target_size = get_preprocess_shape(image_org.shape[0], image_org.shape[1], self.target_length)
 
@@ -81,21 +81,21 @@ class MobileSAM_pooldetection:
 
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        print('defining image encoder')
-        ort_sess_img_encoder=ort.InferenceSession('./data/mobile_sam_Oct23_gelu_approx_no_cf.onnx')
+        print("defining image encoder")
+        ort_sess_img_encoder=ort.InferenceSession("./data/mobile_sam_Oct23_gelu_approx_no_cf.onnx")
 
         outputs = ort_sess_img_encoder.run(None, {"input_image": image.astype(np.float32)})
 
         del ort_sess_img_encoder
 
-        print('extarcted embedding')
+        print("extarcted embedding")
 
 
         image_embedding=outputs[0]
         
         point_grids=build_all_layer_point_grids(8, 0, 1)
 
-        print('built point grid')
+        print("built point grid")
 
         points_scale = np.array(org_size)[None, ::-1]
         points_for_image = point_grids[0] * points_scale
@@ -104,7 +104,7 @@ class MobileSAM_pooldetection:
         onnx_has_mask_input = np.zeros(1, dtype=np.float32)
         cnt=0
         masks=[]
-        print('defining mask decoder')
+        print("defining mask decoder")
 
         ort_sess_mask_decoder=ort.InferenceSession("./data/mobile_sam_opset11.onnx")
         for pt in points_for_image:
@@ -142,9 +142,9 @@ class MobileSAM_pooldetection:
             if olp>overlap:
                 final_mask=mask.copy()
                 
-                print('detected one of the mask')
+                print("detected one of the mask")
                 overlap=olp
-                # np.save(f'./data/mask_{cnt}',final_mask)
+                # np.save(f"./data/mask_{cnt}",final_mask)
                 cnt+=1
                 #break
         return final_mask
@@ -152,11 +152,12 @@ class MobileSAM_pooldetection:
 
 import sys
 if __name__ == "__main__": 
-    image_path=sys.argv[1]
-    print(image_path)
+    image_path = sys.argv[1]
+    mask_path = sys.argv[2]
+    print(image_path, mask_path)
     model=MobileSAM_pooldetection()
-    print('Model defined')
+    print("Model defined")
     mask,_,_=model.segment(image_path)
     mask=np.uint8(mask*255)
-    cv2.imwrite('./data/mask.png', mask)
+    cv2.imwrite(mask_path, mask)
 

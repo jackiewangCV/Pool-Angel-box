@@ -20,24 +20,23 @@ def rle2mask(mask_rle: str, label=1, shape=(1520,2688)):
     return img.reshape(shape)  # Needed to align to RLE direction
 
 
-# url='http://127.0.0.1:8000/'
+# url="http://127.0.0.1:8000/"
 
 
 
-def get_pool(image, url):
-
-    if not isinstance(image,str):
-        cv2.imwrite('./data/sample_image.png', image)
-        image='./data/sample_image.png'
-    mask=[]
-    
-    if not os.path.isfile('./data/mask.png'):
-        if url=='local':
-            print('Using local mobile SAM')
-            subprocess.run(["python", "segmentation/mobileSAM_onnx.py", image])  ## subprpcess is to force the pool model to be removed from RAM, otherwise we need to depend on the garbage collection
-            mask=cv2.imread('./data/mask.png', cv2.IMREAD_GRAYSCALE)
+def get_pool(unique_name, image, url):
+    mask=[]    
+    mask_path = f"./data/mask_{unique_name}.png"
+    if not os.path.exists(mask_path):
+        if url=="local":
+            print("Using local mobile SAM")
+            image_path = f"./data/sample_image_{unique_name}.png"
+            if not os.path.exists(image_path):
+                cv2.imwrite(image_path, image)
+            subprocess.run(["python3", "segmentation/mobileSAM_onnx.py", image_path, mask_path])  ## subprpcess is to force the pool model to be removed from RAM, otherwise we need to depend on the garbage collection
+            mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
     else:
-        mask=cv2.imread('./data/mask.png', cv2.IMREAD_GRAYSCALE)
+        mask=cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
     ret,thresh = cv2.threshold(mask, 40, 255, 0)
     try:
@@ -67,8 +66,8 @@ def get_pool(image, url):
 
 
 
-if __name__ == '__main__':
-    image='/data2/Freelancer/PoolAngel/Data/PoolAngel2/vid2-001.jpg'
+if __name__ == "__main__":
+    image="/data2/Freelancer/PoolAngel/Data/PoolAngel2/vid2-001.jpg"
     im=cv2.imread(image)
     mask,pool_contour=get_pool(image)
     cv2.drawContours(im, pool_contour, -1, (0, 0, 255), 3)

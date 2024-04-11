@@ -14,7 +14,8 @@ from property import Person
 class PoolAngel:
     def __init__(self, source) -> None:
         self.source = Source(source)
-
+        
+        self.input_name = source.split("/")[-1]
         self.pose_model = Pose_TRT("new_code/models/yolov8s-pose-640.onnx.engine", img_size=640)
         self.bechmark = BenchMark()
         self.pool_contour = None
@@ -24,7 +25,7 @@ class PoolAngel:
         
         output_dir = "./data/output"
         os.makedirs(output_dir, exist_ok=True)
-        output_video = f"{output_dir}/output.mkv"
+        output_video = f"{output_dir}/output_{self.input_name}.mkv"
         self.out_width = 640
         self.out_height = 480
         input_fps = 25
@@ -56,7 +57,7 @@ class PoolAngel:
             if self.pool_contour is None:
                 print("Doing pool detection for first time..")
                 self.bechmark.start("mask detection")
-                self.mask, pool_contour, pool_contour_outer = get_pool(frame, self.url)
+                self.mask, pool_contour, pool_contour_outer = get_pool(self.input_name, frame, self.url)
                 self.pool_contour = pool_contour[:,0,:]
                 self.pool_contour_outer = pool_contour_outer[:,0,:]
                 

@@ -36,7 +36,7 @@ class Pose_TRT(TRTInference):
         super().__init__(trt_engine_path, trt_engine_datatype, batch_size)
         
         self.input_size = (img_size, img_size)
-        self.conf_thres = 0.45
+        self.conf_thres = 0.47
         self.iou_thres = 0.65
         
         self.keypoints_name = KEYPOINTS
@@ -47,8 +47,10 @@ class Pose_TRT(TRTInference):
             self.skeleton_color.append(random_rgb_color())
      
     def predict(self, input_image, zone_det=None):
+        
+        # input_image = increase_brightness(input_image, 50)
         if zone_det is not None:
-            input_image = input_image[zone_det[1]:zone_det[3], zone_det[0]:zone_det[2]].copy()
+            input_image = input_image[zone_det[1]:zone_det[3], zone_det[0]:zone_det[2]]
 
         img_preprocessing, ratio, dwdh = pre_processing(input_image, self.input_size)
         trt_outputs = self.infer(img_preprocessing)
@@ -218,6 +220,21 @@ def xywh2xyxy(x):
     y[:, 2] = x[:, 0] + x[:, 2] / 2  # bottom right x
     y[:, 3] = x[:, 1] + x[:, 3] / 2  # bottom right y
     return y
+
+def increase_brightness(frame, value):
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)  # Convert frame to HSV color space
+    h, s, v = cv2.split(hsv)  # Split into individual channels
+
+    # Increase the value (brightness) channel
+    v = np.clip(v + value, 0, 255)
+
+    # Merge the channels back together
+    hsv = cv2.merge((h, s, v))
+
+    # Convert back to BGR color space
+    brightened_frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+    return brightened_frame
 
 def pose_postprocess(
         out: Union[Tuple, np.ndarray],

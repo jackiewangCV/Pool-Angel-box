@@ -121,11 +121,14 @@ class PoolAngel:
                 ps.update_distance(self.pool_contour, self.pool_contour_outer)
                 persons.append(ps)
                 if ps.dist_pool == 0:
-                    clr = (0, 0, 255)
+                    clr = (0, 0, 255) 
+                    # people is dangerous please send SOS
                 elif ps.warn:
-                    clr = (30, 255, 255)
+                    clr = (30, 255, 255) 
+                    # people is quite close to the pool please send warning
                 else:
-                    clr = (0, 255, 0)
+                    clr = (0, 255, 0) 
+                    # no event people is safe
                 colors.append(clr)
                 
                 typs.append(f"{tp} {p_height:.1f}")

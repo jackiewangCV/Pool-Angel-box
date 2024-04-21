@@ -69,3 +69,19 @@ $ python3 main.py --input <path video file>
 ```
 $ ls ./data/output/output.mkv
 ```
+
+
+```
+Pool Boundary Specification:
+Create 2 zones around the pool edge.
+Zone 1 - Z1 - On the pool
+Zone 2 - Z2 - 2 to 3 meters from the edge of pool
+
+List for alerts
+1. Unattended child (no adult present) enters in Z2
+2. ⁠Child enters in Z1 and no reaction from adult i.e. child disappears under water for x time and parent does not intervene
+3. ⁠Unattended child (no adult present) enters in Z1
+4. Adult or child slip in Z2
+5. Adult or child slip and enter in Z1
+6. Medical episodes like seizure, fits, heart attack in Z1 or Z2
+```

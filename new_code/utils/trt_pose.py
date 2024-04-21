@@ -36,7 +36,7 @@ class Pose_TRT(TRTInference):
         super().__init__(trt_engine_path, trt_engine_datatype, batch_size)
         
         self.input_size = (img_size, img_size)
-        self.conf_thres = 0.47
+        self.conf_thres = 0.6
         self.iou_thres = 0.65
         
         self.keypoints_name = KEYPOINTS
@@ -60,8 +60,13 @@ class Pose_TRT(TRTInference):
             
         return bboxes, scores, kpts
     
-    def vis_pose(self, img, bboxes, scores, kpts, out_width, out_height, typs=None, colors=None, conf_kpt=0.2):
+    def vis_pose(self, img, bboxes, scores, kpts, out_width, out_height, 
+                track_ids=None, typs=None, colors=None, conf_kpt=0.2):
         # print("num pose:", bboxes.shape[0])
+        # print("num bboxes:", bboxes)
+        # print("num track_ids:", track_ids)
+        # print("num typs:", typs)
+        # print("num colors:", colors)
         vis_img = img.copy()
         for i in range(bboxes.shape[0]):
             box = bboxes[i]
@@ -74,6 +79,10 @@ class Pose_TRT(TRTInference):
             label = ""
             if typs is not None:
                 label = typs[i]
+            if track_ids is not None:
+                object_id =  track_ids[i]
+                if object_id != -1:
+                    label = f"[{object_id}] {label}"
             
             c1, c2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
             cv2.rectangle(vis_img, c1, c2, color, 3, cv2.LINE_AA)

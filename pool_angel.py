@@ -9,6 +9,7 @@ import os
 import sys
 sys.path.append("new_code")
 from utils.trt_pose import Pose_TRT
+from tracker.track_engine import TrackerInterface
 from property import Person
 
 class PoolAngel:
@@ -17,6 +18,7 @@ class PoolAngel:
         
         self.input_name = source.split("/")[-1]
         self.pose_model = Pose_TRT("new_code/models/yolov8s-pose-640.onnx.engine", img_size=640)
+        self.tracker =  TrackerInterface()
         self.bechmark = BenchMark()
         self.pool_contour = None
         self.zone_det = None
@@ -46,9 +48,9 @@ class PoolAngel:
             # self.bechmark.start("Frame procesisng")
 
             ### Frame capture
-            self.bechmark.start("Frame Capture")
+            # self.bechmark.start("Frame Capture")
             has_frame, frame = self.source.get_frame()
-            self.bechmark.stop("Frame Capture")
+            # self.bechmark.stop("Frame Capture")
 
             if not has_frame:
                 print("End of video")
@@ -88,13 +90,14 @@ class PoolAngel:
             ### Object detection 
             self.bechmark.start("Object detection")
             bboxes, scores, kpts = self.pose_model.predict(frame, self.zone_det)
+            track_ids = self.tracker.track(bboxes, scores)
             persons = []
             colors = []
             typs = []
-            for i, bb in enumerate(bboxes):
-                rat, p_height = self.pose_model.compute_rat(kpts[i])
+            for oid, bb, s, kp in zip(track_ids, bboxes, scores, kpts):
+                rat, p_height = self.pose_model.compute_rat(kp)
                 
-                ps = Person(i, bbox=bb, pose=kpts[i], confidence=scores[i], ratio=rat)
+                ps = Person(i, bbox=bb, pose=kp, confidence=s, ratio=rat)
                 tp = ps.child_or_adult()
                 
                 for range_y_j in self.range_y_axis_height:                    
@@ -114,7 +117,7 @@ class PoolAngel:
                             if rat < 0.85:
                                 tp = f"child {rat:.2f}"
                             else:
-                                tp = f"adult {rat:.2f}"    
+                                tp = f"adult {rat:.2f}"
                         break
                 
                 ps.detect_slip()
@@ -132,7 +135,7 @@ class PoolAngel:
                 colors.append(clr)
                 
                 typs.append(f"{tp} {p_height:.1f}")
-                print(f"[{frame_c}] {scores[i][0]:.2f} Pose {i} : typ {tp} rat {p_height:.2f}")
+                print(f"[{frame_c}] {s[0]:.2f} Pose {i} id {oid}: typ {tp} rat {p_height:.2f}")
             self.bechmark.stop("Object detection")
             
             ## visualize detections
@@ -144,7 +147,8 @@ class PoolAngel:
             cv2.rectangle(frame, (self.zone_det[0], self.zone_det[1]), 
                         (self.zone_det[2], self.zone_det[3]), (255, 0, 255), 3, cv2.LINE_AA)
             vis_img = self.pose_model.vis_pose(frame, bboxes, scores, kpts, 
-                    self.out_width, self.out_height, typs=typs, colors=colors)  ## Last argment is hardcoded
+                    self.out_width, self.out_height, 
+                    track_ids=track_ids, typs=typs, colors=colors)  ## Last argment is hardcoded
             self.video_writer.write(vis_img)
             # cv2.imwrite("t.jpg", vis_img)
             self.bechmark.stop("Visualization")

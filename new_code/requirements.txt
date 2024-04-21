@@ -1,3 +1,5 @@
 nvidia-pyindex
 opencv-python
 onnxruntime
+scipy
+filterpy

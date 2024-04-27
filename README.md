@@ -40,6 +40,8 @@ $ sudo reboot
 https://drive.google.com/drive/folders/1EhTQk4puu_d49ZRkUFAqy0iO6iUMmax_?usp=sharing
 
 yolov8s-pose-640.onnx: place model to /media/sd64g/workspace/Pool-Angel-box/new_code/models/yolov8s-pose-640.onnx
+mobile_sam_Oct23_gelu_approx_no_cf.onnx: place model to /media/sd64g/workspace/Pool-Angel-box/data/mobile_sam_Oct23_gelu_approx_no_cf.onnx
+mobile_sam_opset11.onnx: place model to /media/sd64g/workspace/Pool-Angel-box/data/mobile_sam_opset11.onnx
 l4t_trt_image.rar: import docker image by command:
 $ docker import - l4t_trt_image < l4t_trt_image.rar
 

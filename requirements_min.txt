@@ -1,6 +1,0 @@
-python-opencv  ##comment in vim3 and use the pre-build binary for NPU usage.
-pyaml
-tensorflow
-numpy==1.23
-matplotlib
-onnxruntime==1.7

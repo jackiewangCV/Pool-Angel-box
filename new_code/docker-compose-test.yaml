@@ -9,6 +9,7 @@ services:
 
     runtime: nvidia
     restart: unless-stopped
+    command: "bash"
 
     environment:
       PYTHONIOENCODING: utf-8

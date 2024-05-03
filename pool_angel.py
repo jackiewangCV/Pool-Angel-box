@@ -34,6 +34,8 @@ class PoolAngel:
         self.video_writer = cv2.VideoWriter(output_video, 
                 cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (self.out_width, self.out_height))
 
+        self.pool_width = 0
+        self.max_width = 0
         self.num_split_y = 2
         self.range_y_axis_height = []
         
@@ -69,12 +71,14 @@ class PoolAngel:
                 self.pool_contour_outer = pool_contour_outer[:,0,:]
                 
                 max_height, max_width = frame.shape[:2]
-                x, _, width, _ = cv2.boundingRect(self.pool_contour_outer)
-                xmin = max(0, x - width // 4)
-                xmax = min(max_width, x + width + width // 4)
-                self.zone_det = (xmin, 0, xmax, max_height)
+                x, _, width, height = cv2.boundingRect(self.pool_contour_outer)
+                xmin = max(0, x - width // 5)
+                xmax = min(max_width, x + width + width // 5)
+                self.zone_det = (xmin, 0, xmax, height + max_height // 5)
                 print(self.mask.shape)
                 self.bechmark.stop("mask detection")
+                self.pool_width = width
+                self.max_width = max_width
                 
                 range_y = 0
                 length_y = max_height // self.num_split_y
@@ -94,6 +98,8 @@ class PoolAngel:
             persons = []
             colors = []
             typs = []
+            list_position_aware = []
+            list_position_adult = []
             for oid, bb, s, kp in zip(track_ids, bboxes, scores, kpts):
                 rat, p_height = self.pose_model.compute_rat(kp)
                 
@@ -114,7 +120,7 @@ class PoolAngel:
                             range_y_j["min_p_height"] is not None and \
                             range_y_j["min_p_height"] / range_y_j["max_p_height"] < 0.6:
                             rat = p_height / ((range_y_j["max_p_height"] + range_y_j["min_p_height"]) / 2)
-                            if rat < 0.85:
+                            if rat < 1.19:
                                 tp = f"child {rat:.2f}"
                             else:
                                 tp = f"adult {rat:.2f}"
@@ -123,6 +129,7 @@ class PoolAngel:
                 ps.detect_slip()
                 ps.update_distance(self.pool_contour, self.pool_contour_outer)
                 persons.append(ps)
+                is_aware = True
                 if ps.dist_pool == 0:
                     clr = (0, 0, 255) 
                     # people is dangerous please send SOS
@@ -130,16 +137,45 @@ class PoolAngel:
                     clr = (30, 255, 255) 
                     # people is quite close to the pool please send warning
                 else:
-                    clr = (0, 255, 0) 
+                    clr = (0, 255, 0)
+                    is_aware = False
                     # no event people is safe
                 colors.append(clr)
                 
+                if "adult" in tp:
+                    list_position_adult.append((oid, bb))
+                elif "child" in tp and is_aware:
+                    list_position_aware.append((oid, bb))
                 typs.append(f"{tp} {p_height:.1f}")
                 print(f"[{frame_c}] {s[0]:.2f} Pose {i} id {oid}: typ {tp} rat {p_height:.2f}")
             self.bechmark.stop("Object detection")
             
+            for oid, bb in list_position_aware:
+                offset_alert = 20
+                xmin = int(bb[0] - offset_alert)
+                ymin = int(bb[1] - offset_alert)
+                xmax = int(bb[2] + offset_alert)
+                ymax = int(bb[3] + offset_alert)
+                message_topic1 = f"alert topic1: child {oid}"
+                if len(list_position_adult) == 0:
+                    print(message_topic1)
+                    cv2.putText(frame, message_topic1, (xmin, ymax), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness=2)
+                    cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (255, 0, 255), 2, cv2.LINE_AA)
+                else:
+                    min_dis_from_child_to_adult = self.max_width
+                    for (_, bb2) in list_position_adult:
+                        dis_pp = np.sqrt((bb[0]-bb2[0])**2 + (bb[1]-bb2[1])**2)
+                        if min_dis_from_child_to_adult > dis_pp:
+                            min_dis_from_child_to_adult = dis_pp
+                    if min_dis_from_child_to_adult > self.pool_width / 4:
+                        print(message_topic1)
+                        cv2.putText(frame, message_topic1, (xmin, ymax), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness=2)
+                        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), (255, 0, 255), 2, cv2.LINE_AA)
+                
             ## visualize detections
-            self.bechmark.start("Visualization")
+            # self.bechmark.start("Visualization")
             cv2.drawContours(frame, pool_contour[:,np.newaxis,:], -1, (0, 0, 255), 3)
             cv2.drawContours(frame, pool_contour_outer[:,np.newaxis,:], -1, (30, 255, 255), 3)
             cv2.putText(frame, f"Frame {frame_c}", (50, 50), 
@@ -151,7 +187,7 @@ class PoolAngel:
                     track_ids=track_ids, typs=typs, colors=colors)  ## Last argment is hardcoded
             self.video_writer.write(vis_img)
             # cv2.imwrite("t.jpg", vis_img)
-            self.bechmark.stop("Visualization")
+            # self.bechmark.stop("Visualization")
 
             # time_now=datetime.now()
             # if (time_now-last_img_store).total_seconds()>100:  ## store only if last event has happened in last 10min

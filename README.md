@@ -33,7 +33,8 @@ sudo chmod +x /usr/local/bin/docker-compose
 sudo reboot
 ```
 - Dowload docker-image and model from [here](https://drive.google.com/drive/folders/1EhTQk4puu_d49ZRkUFAqy0iO6iUMmax_?usp=sharing).</br>
-`yolov8s-pose-640.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/new_code/models/yolov8s-pose-640.onnx</br>
+`yolov8s-640.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/new_code/models/yolov8s-640.onnx</br>
+`child-adult-cls-yolov8s-128.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/new_code/models/child-adult-cls-yolov8s-128.onnx</br>
 `mobile_sam_Oct23_gelu_approx_no_cf.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/data/mobile_sam_Oct23_gelu_approx_no_cf.onnx</br>
 `mobile_sam_opset11.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/data/mobile_sam_opset11.onnx</br>
 `l4t_trt_image.rar`: import docker image by the following command:
@@ -51,8 +52,10 @@ docker exec -it aicore bash
 ## build trt model
 
 ```bash
-cd /workspace
-/usr/src/tensorrt/bin/trtexec --onnx=new_code/models/yolov8s-pose-640.onnx --saveEninge=new_code/models/yolov8s-pose-640.onnx.engine --buildOnly
+
+/usr/src/tensorrt/bin/trtexec --onnx=new_code/models/yolov8s-640.onnx --saveEngine=new_code/models/yolov8s-640.onnx.engine --buildOnly --fp16
+
+/usr/src/tensorrt/bin/trtexec --onnx=new_code/models/child-adult-cls-yolov8s-128.onnx --saveEngine=new_code/models/child-adult-cls-yolov8s-128.onnx --buildOnly --fp16
 ```
 ## run code
 ```bash

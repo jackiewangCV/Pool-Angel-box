@@ -32,7 +32,7 @@ sudo mv docker-compose-linux-aarch64 /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
 sudo reboot
 ```
-- Dowload docker-image and model from [here](https://drive.google.com/drive/folders/1EhTQk4puu_d49ZRkUFAqy0iO6iUMmax_?usp=sharing).</br>
+- Dowload docker-image and model from [here](https://drive.google.com/drive/folders/1bmQEVgS-dYX6Ci2gWJCd9o7MnNWVjbyn?usp=sharing).</br>
 `yolov8s-640.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/new_code/models/yolov8s-640.onnx</br>
 `child-adult-cls-yolov8s-128.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/new_code/models/child-adult-cls-yolov8s-128.onnx</br>
 `mobile_sam_Oct23_gelu_approx_no_cf.onnx`: place model to /media/sd64g/workspace/Pool-Angel-box/data/mobile_sam_Oct23_gelu_approx_no_cf.onnx</br>

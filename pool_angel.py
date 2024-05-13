@@ -8,7 +8,8 @@ import time
 import os
 import sys
 sys.path.append("new_code")
-from utils.trt_pose import Pose_TRT
+from utils.trt_people_det import Yolov8_det_TRT
+from utils.trt_people_cls import Yolov8_cls_TRT
 from tracker.track_engine import TrackerInterface
 from property import Person
 
@@ -17,7 +18,9 @@ class PoolAngel:
         self.source = Source(source)
         
         self.input_name = source.split("/")[-1]
-        self.pose_model = Pose_TRT("new_code/models/yolov8s-pose-640.onnx.engine", img_size=640)
+        self.server_key = "YXV0aG9yIGh0dHBzOi8vZ2l0aHViLmNvbS9sZWRpbmh0cmk5NyBQb29sIHByb2plY3QgZnJlZWxhbmNl"
+        self.people_det = Yolov8_det_TRT("new_code/models/yolov8s-640.onnx.engine")
+        self.people_cls = Yolov8_cls_TRT("new_code/models/child-adult-cls-yolov8s-128.onnx.engine")
         self.tracker =  TrackerInterface()
         self.bechmark = BenchMark()
         self.pool_contour = None
@@ -27,17 +30,15 @@ class PoolAngel:
         
         output_dir = "./data/output"
         os.makedirs(output_dir, exist_ok=True)
-        output_video = f"{output_dir}/output_{self.input_name}.mkv"
+        self.output_video = f"{output_dir}/output_{self.input_name}.mkv"
         self.out_width = 640
         self.out_height = 480
         input_fps = 25
-        self.video_writer = cv2.VideoWriter(output_video, 
+        self.video_writer = cv2.VideoWriter(self.output_video, 
                 cv2.VideoWriter_fourcc(*"MJPG"), input_fps, (self.out_width, self.out_height))
 
         self.pool_width = 0
         self.max_width = 0
-        self.num_split_y = 2
-        self.range_y_axis_height = []
         
     def run(self):
                     
@@ -74,59 +75,35 @@ class PoolAngel:
                 x, _, width, height = cv2.boundingRect(self.pool_contour_outer)
                 xmin = max(0, x - width // 5)
                 xmax = min(max_width, x + width + width // 5)
-                self.zone_det = (xmin, 0, xmax, height + max_height // 5)
+                self.zone_det = (xmin, 0, xmax, max_height)
                 print(self.mask.shape)
                 self.bechmark.stop("mask detection")
                 self.pool_width = width
                 self.max_width = max_width
-                
-                range_y = 0
-                length_y = max_height // self.num_split_y
-                for i in range(self.num_split_y):
-                    self.range_y_axis_height.append({
-                        "ymin": range_y,
-                        "ymax": (range_y + length_y),
-                        "max_p_height": None,
-                        "min_p_height": None
-                    })
-                    range_y += length_y
 
             ### Object detection 
             self.bechmark.start("Object detection")
-            bboxes, scores, kpts = self.pose_model.predict(frame, self.zone_det)
+            bboxes, scores, labels = self.people_det.predict(frame, zone_det=self.zone_det)
             track_ids = self.tracker.track(bboxes, scores)
             persons = []
             colors = []
             typs = []
             list_position_aware = []
             list_position_adult = []
-            for oid, bb, s, kp in zip(track_ids, bboxes, scores, kpts):
-                rat, p_height = self.pose_model.compute_rat(kp)
+            for oid, bb, s, lb in zip(track_ids, bboxes, scores, labels):
                 
-                ps = Person(i, bbox=bb, pose=kp, confidence=s, ratio=rat)
-                tp = ps.child_or_adult()
+                p_height = bb[3] - bb[1]
                 
-                for range_y_j in self.range_y_axis_height:                    
-                    if range_y_j["ymin"] < bb[3] < range_y_j["ymax"]:
-                        if range_y_j["max_p_height"] is None:
-                            range_y_j["max_p_height"] = p_height
-                        elif range_y_j["max_p_height"] < p_height:
-                            range_y_j["max_p_height"] = p_height
-                        if range_y_j["min_p_height"] is None:
-                            range_y_j["min_p_height"] = p_height
-                        elif range_y_j["min_p_height"] > p_height:
-                            range_y_j["min_p_height"] = p_height
-                        if range_y_j["max_p_height"] is not None and \
-                            range_y_j["min_p_height"] is not None and \
-                            range_y_j["min_p_height"] / range_y_j["max_p_height"] < 0.6:
-                            rat = p_height / ((range_y_j["max_p_height"] + range_y_j["min_p_height"]) / 2)
-                            if rat < 1.19:
-                                tp = f"child {rat:.2f}"
-                            else:
-                                tp = f"adult {rat:.2f}"
-                        break
+                ps = Person(oid, bbox=bb, confidence=s)
+                bb = list(map(int, bb))
+                crop_people = frame[bb[1]:bb[3], bb[0]:bb[2]]
+                label_cls, conf_cls = self.people_cls.predict(crop_people)
+                if label_cls == 1:
+                    tp = f"child {conf_cls:.2f}"
+                else:
+                    tp = f"adult {conf_cls:.2f}"
                 
-                ps.detect_slip()
+                # ps.detect_slip()
                 ps.update_distance(self.pool_contour, self.pool_contour_outer)
                 persons.append(ps)
                 is_aware = True
@@ -147,7 +124,7 @@ class PoolAngel:
                 elif "child" in tp and is_aware:
                     list_position_aware.append((oid, bb))
                 typs.append(f"{tp} {p_height:.1f}")
-                print(f"[{frame_c}] {s[0]:.2f} Pose {i} id {oid}: typ {tp} rat {p_height:.2f}")
+                print(f"[{frame_c}] {s[0]:.2f} Pose id {oid}: typ {tp} rat {p_height:.2f}")
             self.bechmark.stop("Object detection")
             
             for oid, bb in list_position_aware:
@@ -182,9 +159,9 @@ class PoolAngel:
                     cv2.FONT_HERSHEY_SIMPLEX, 1.75, (0, 0, 255), thickness=3)
             cv2.rectangle(frame, (self.zone_det[0], self.zone_det[1]), 
                         (self.zone_det[2], self.zone_det[3]), (255, 0, 255), 3, cv2.LINE_AA)
-            vis_img = self.pose_model.vis_pose(frame, bboxes, scores, kpts, 
+            vis_img = self.people_det.vis_people(frame, bboxes, scores, 
                     self.out_width, self.out_height, 
-                    track_ids=track_ids, typs=typs, colors=colors)  ## Last argment is hardcoded
+                    track_ids=track_ids, typs=typs, colors=colors)  ## Last argment is hardcoded 
             self.video_writer.write(vis_img)
             # cv2.imwrite("t.jpg", vis_img)
             # self.bechmark.stop("Visualization")
@@ -201,6 +178,9 @@ class PoolAngel:
             
             # self.bechmark.stop("Frame procesisng")
         self.bechmark.stop("Whole process")
+        self.video_writer.release()
+        print(f"Save video {self.output_video}")
         total_t = time.time() - start_t
         print(f"{frame_c} in {total_t} -> FPS: {frame_c / total_t}")
-        self.pose_model.destroy()
+        self.people_det.destroy()
+        self.people_cls.destroy()

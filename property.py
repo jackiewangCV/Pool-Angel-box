@@ -7,7 +7,7 @@ class Person:
     """
     def __init__(self, id, bbox, pose=None,dist_pool=None, confidence=0.0, ratio=0) -> None:
         self.bbox=[bbox]
-        self.pose=[pose]
+        # self.pose=[pose]
         self.id=id
         self.dist_pool=dist_pool
         self.confidence=confidence
@@ -17,20 +17,21 @@ class Person:
         self.warn=False
 
     def detect_slip(self):
-        pose = self.pose[-1]
-        pose = np.array(pose).reshape(17, 3)
-        height1=np.sqrt((pose[0,1]-pose[15,1])**2+(pose[0,0]-pose[16,0])**2)
-        height2=np.sqrt((pose[0,1]-pose[15,1])**2+(pose[0,0]-pose[16,0])**2)
-        diff1=np.abs(pose[15,0]-pose[13,0])
-        diff2=np.abs(pose[16,0]-pose[14,0])
-        diff3=np.abs(pose[11,0]-pose[13,0])
-        diff4=np.abs(pose[14,0]-pose[12,0])
-        self.diff=np.mean(np.array([diff1, diff2, diff3, diff4]))/max(height1,height2)
-        if self.diff<0.05:
-            self.is_slipped=True
-            print(f"slip detected {self.diff}")
-        else:
-            self.is_slipped=False
+        # pose = self.pose[-1]
+        # pose = np.array(pose).reshape(17, 3)
+        # height1=np.sqrt((pose[0,1]-pose[15,1])**2+(pose[0,0]-pose[16,0])**2)
+        # height2=np.sqrt((pose[0,1]-pose[15,1])**2+(pose[0,0]-pose[16,0])**2)
+        # diff1=np.abs(pose[15,0]-pose[13,0])
+        # diff2=np.abs(pose[16,0]-pose[14,0])
+        # diff3=np.abs(pose[11,0]-pose[13,0])
+        # diff4=np.abs(pose[14,0]-pose[12,0])
+        # self.diff=np.mean(np.array([diff1, diff2, diff3, diff4]))/max(height1,height2)
+        # if self.diff<0.05:
+        #     self.is_slipped=True
+        #     print(f"slip detected {self.diff}")
+        # else:
+        #     self.is_slipped=False
+        pass
 
     def update_distance(self, pool_contour_tight, pool_contour_warning):
         bb=self.bbox[-1]
@@ -53,6 +54,4 @@ class Person:
             self.is_child = "adult"
         return self.is_child
     
-    def __str__(self):
-        return "".join([str(x) for x in self.pose])
     

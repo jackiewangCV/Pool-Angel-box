@@ -6,7 +6,7 @@ import sys
 import os
 
 def infer_data(input_path, save_crop=None):
-
+    #author https://github.com/ledinhtri97 pool project job
     if save_crop:
         adult_images = f"{save_crop}/adult"
         children_images = f"{save_crop}/children"
